@@ -1,0 +1,20 @@
+UIM Decom steps (one per one entry)
+
+
+1. What's the entry ?
+---
+A) An UIM agent (a robot)
+	A.1 - Get the robot rows (stored on the SQL `cm_computer_system` table)
+	A.2 - Send the callback `remove_master_devices_by_cskeys` with the robot `cs_key` retrieved on the A.1 step to the discovery_server probe where the script (have) to be executed.
+	A.3 - Remove agent from hub with the callback `removerobot`
+
+B) A Network device
+	B.1 - Identify the type and the source of this device (snmp_collector, third_party probe like snmp_ipsla).
+	B.2 - Remove the device from collectors
+
+C) Something else ?
+---
+2. Remove open & history of alarms from SQL `nas_transaction_log` & `nas_transaction_summary` tables.
+3. Delete QoS data
+	3.1 (opt) - Delete related MCS/SSR QoS.
+4. Deleting device from NAS address table ?
