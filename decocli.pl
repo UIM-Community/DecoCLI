@@ -3,7 +3,6 @@
 use strict;
 use warnings;
 use Data::Dumper qw(Dumper);
-use Scalar::Util qw(looks_like_number);
 
 # Use Nimbus dependencie(s)
 # Update path depending on your system!
@@ -15,8 +14,9 @@ use Nimbus::PDS;
 use Nimbus::CFG;
 
 # Use internal dependencie(s)
-use src::utils qw(scriptArgsAsHash checkDefined);
+use src::utils qw(findProbeByHisName);
 use src::uimdb;
+use src::cli;
 
 #
 # DESC: print to STDERR unexpected die handle
@@ -25,102 +25,62 @@ $SIG{__DIE__} = \&exitScriptWithError;
 sub exitScriptWithError {
     my ($err) = @_;
     print STDERR "$err\n";
-    exit(1);
+    exit 1;
 }
 
 # Declare script GLOBALS & CONSTANTS
 use constant {
     VERSION => "1.0.0"
 };
-my ($type, $deleteQoS, $closeAlarms, $removeRobot, $cleanAlarms, $deviceName, $closeBy);
+my $deviceRegex = '^[a-zA-Z0-9-_@]{2,50}$';
+my ($deviceName, $closeBy);
 
 #
-# DESC: Get start script arguments (with default payload)
+# DESC: Setup available CLI command(s)
 #
-my $script_arguments = scriptArgsAsHash({
-    type => "robot"
+my $cli = src::cli->new({
+    usage => "Usage: perl decocli.pl [options]",
+    description => "A Commande Line Interface (CLI) tool for deleting UIM Robot/Device.",
+    version => "1.0.0"
 });
 
-#
-# DESC: Script start arguments contains --h and/or --help
-#
-if (defined $script_arguments->{h} || defined $script_arguments->{help}) {
-    print STDOUT "\nUsage: perl decocli.pl [options]\n\n";
-    print STDOUT "\t< perl decocli.pl --device name --type device --alarms --qos >\n\n";
-    print STDOUT "A Commande Line Interface (CLI) tool for deleting UIM Robot/Device.\n\n";
-    print STDOUT "Options:\n";
-    print STDOUT "\t-h, --help        output usage information\n";
-    print STDOUT "\t-v, --version     output the version number\n";
-    print STDOUT "\t-d, --device      Device name to remove/decom. This option is mandatory.\n";
-    print STDOUT "\t-t, --type        Define if we have to remove a network <device> or an UIM <robot>\n";
-    print STDOUT "\tPossible values are: <robot> or <device> and the default value if none: robot\n\n";
-    print STDOUT "\t-a, --alarms      Enable disabling of active alarms\n";
-    print STDOUT "\t-q, --qos         Enable deletion of QOS History\n";
-    print STDOUT "\t-r, --remove      Remove the robot from his hub (work only when option --type is equal to robot)\n";
-    print STDOUT "\t-c, --clean       Clean alarms history\n";
-    print STDOUT "\n";
+# --device command to set string* device name
+$cli->setCommand("device", {
+    description => "Device name to remove/decom (have to be valid).",
+    match => qr/$deviceRegex/,
+    required => 1
+});
 
-    # Help will automatically exit the script
-    exit 0;
-}
+# --type define if we work with a Network device or a UIM Robot.
+$cli->setCommand("type", {
+    expect => ["robot", "device"],
+    description => "Define if we have to remove a network <device> or an UIM <robot>",
+    defaultValue => "robot"
+});
 
-#
-# DESC: Script start arguments contains --v and/or --version
-#
-if (defined $script_arguments->{v} || defined $script_arguments->{version}) {
-    print STDOUT "Version ".VERSION."\n\n";
+# --alarms Enable the option that will acknowledge all active alarms!
+$cli->setCommand("alarms", {
+    description =>  "Enable disabling of active alarms",
+    defaultValue => 0
+});
 
-    # Output script version will automatically exit the script
-    exit 0;
-}
+# --qos Enable delete of all QoS history
+$cli->setCommand("qos", {
+    description => "Enable deletion of QOS History",
+    defaultValue => 0
+});
 
-#
-# DESC: Device have to be defined
-#
-if (defined $script_arguments->{device} || defined $script_arguments->{d}) {
-    $deviceName = $script_arguments->{device} || $script_arguments->{d};
-    $deviceName =~ s/^\s+|\s+$//g;
-    if ($deviceName eq "" || looks_like_number($deviceName)) {
-        die "Device name is mandatory. It can't be an empty string or a number.\n";
-    }
-}
-else {
-    die "Device name is mandatory. Please, define a device with the command --d [name] or --device [name]\n";
-}
+# --remove Remove the UIM Robot from his hub (Work only for type robot).
+$cli->setCommand("remove", {
+    description => "Remove the robot from his hub (work only when option --type is equal to robot)",
+    defaultValue => 0
+});
 
-#
-# DESC: Check CLI default arguments and values
-#
-if (defined $script_arguments->{type} || defined $script_arguments->{t}) {
-    $type = $script_arguments->{type} || $script_arguments->{t};
-    $type =~ s/^\s+|\s+$//g;
-    if ($type ne "robot" && $type ne "device") {
-        die "Invalid value for option --type. It should be equal to one of these values: robot or device\n";
-    }
-}
-$deleteQoS = checkDefined($script_arguments, 0, ["qos", "q"]);
-$closeAlarms = checkDefined($script_arguments, 0, ["alarms", "a"]);
-$removeRobot = checkDefined($script_arguments, 0, ["remove", "r"]);
-$cleanAlarms = checkDefined($script_arguments, 0, ["clean", "c"]);
-
-#
-# DESC: Find a probe addr by his name
-#
-sub find_probe_byname {
-    my ($probeName) = @_;
-
-    my $PDS = Nimbus::PDS->new();
-    $PDS->string("probename", $probeName);
-    my ($RC, $nimRET) = nimFindAsPds($PDS->data, NIMF_PROBE);
-    if ($RC != NIME_OK) {
-        my $nimError = nimError2Txt($RC);
-        print STDERR "Failed to find any $probeName Addr, Error ($RC): $nimError\n";
-
-        return undef;
-    }
-
-    return Nimbus::PDS->new($nimRET)->getTable("addr", PDS_PCH);
-}
+# --clean Remove alarms history
+$cli->setCommand("clean", {
+    description => "Clean alarms history",
+    defaultValue => 0
+});
 
 #
 # DESC: Remove Device/Agent from UIM with discovery_server probe
@@ -135,7 +95,7 @@ sub remove_from_uim {
     print STDOUT "Device cs_key => $cs_key\n";
 
     # Find (at least one) Discovery_server Addr
-    my $addr = find_probe_byname("discovery_server");
+    my $addr = findProbeByHisName("discovery_server");
     return if not defined($addr);
     print STDOUT "Discovery_server Addr found: $addr\n";
 
@@ -239,6 +199,11 @@ sub delete_qos {
 #
 sub main {
 
+    # Init CLI options
+    my $script_arguments = $cli->init;
+    my $type = $script_arguments->{type};
+    $deviceName = $script_arguments->{device};
+
     # Open the local configuration file
     my $CFG = Nimbus::CFG->new("decocli.cfg");
     if (not defined($CFG->{"setup"})) {
@@ -268,20 +233,21 @@ sub main {
     my $DB;
     # Initialize a connection to the product table!
     {
-        my $type    = $CFG->{"database"}->{"type"} || "mysql";
+        my $DBType  = $CFG->{"database"}->{"type"} || "mysql";
         my $db      = $CFG->{"database"}->{"database"} || "ca_uim";
         my $host    = $CFG->{"database"}->{"host"} || "127.0.0.1";
         my $port    = $CFG->{"database"}->{"port"} || 33006;
         my $user    = $CFG->{"database"}->{"user"} || "sa";
         my $passwd  = $CFG->{"database"}->{"password"} || "";
 
-        my $CS      = "DBI:$type:database=$db;host=$host;port=$port";
+        my $CS      = "DBI:$DBType:database=$db;host=$host;port=$port";
         print STDOUT "SQL connection string: $CS\n";
         $DB = src::uimdb->new($CS, $user, $passwd);
     }
+    undef $CFG;
 
     # Find (at least one) NAS Addr
-    my $nasAddr = find_probe_byname("nas");
+    my $nasAddr = findProbeByHisName("nas");
     return if not defined($nasAddr);
     print STDOUT "NAS Addr found: $nasAddr\n";
 
@@ -289,14 +255,15 @@ sub main {
 
     # Finally execute each steps
     remove_from_uim($DB, $Robotname, $nasAddr);
-    remove_robot() if $type eq "robot" && $removeRobot;
+    remove_robot() if $type eq "robot" && $script_arguments->{remove} == 1;
     remove_collector() if $type eq "device";
-    close_alarms($Robotname, $nasAddr) if $closeAlarms;
-    clean_alarms_history($DB) if $cleanAlarms;
-    delete_qos($DB) if $deleteQoS;
+    close_alarms($Robotname, $nasAddr) if $script_arguments->{alarms} == 1;
+    clean_alarms_history($DB) if $script_arguments->{clean} == 1;
+    delete_qos($DB) if $script_arguments->{qos} == 1;
 
     print STDOUT "\nExiting CLI tool with code 0\n";
 }
 
 # Execute main script handler!
 main();
+exit 0;

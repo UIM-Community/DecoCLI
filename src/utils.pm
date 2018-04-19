@@ -1,11 +1,15 @@
 package src::utils;
 
-# Perl Core package(s)
+# Perl Core packages
 use strict;
 use Exporter qw(import);
 
-# Export utils functions
-our @EXPORT_OK = qw(scriptArgsAsHash assignHash checkDefined);
+# Use Nimbus dependencies
+use Nimbus::API;
+use Nimbus::PDS;
+
+# Export functions
+our @EXPORT_OK = qw(scriptArgsAsHash assignHash checkDefined findProbeByHisName);
 
 #
 # DESC: Get the script arguments values mapped as a hash
@@ -61,6 +65,25 @@ sub checkDefined {
         return $ref->{$_} if defined $ref->{$_};
     }
     return $default;
+}
+
+#
+# DESC: Find a probe addr by his name
+#
+sub findProbeByHisName {
+    my ($probeName) = @_;
+
+    my $PDS = Nimbus::PDS->new();
+    $PDS->string("probename", $probeName);
+    my ($RC, $nimRET) = nimFindAsPds($PDS->data, NIMF_PROBE);
+    if ($RC != NIME_OK) {
+        my $nimError = nimError2Txt($RC);
+        print STDERR "Failed to find any $probeName Addr, Error ($RC): $nimError\n";
+
+        return undef;
+    }
+
+    return Nimbus::PDS->new($nimRET)->getTable("addr", PDS_PCH);
 }
 
 1;
