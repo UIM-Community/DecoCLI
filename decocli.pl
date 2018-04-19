@@ -46,7 +46,7 @@ my $cli = src::cli->new({
 
 # --device command to set string* device name
 $cli->setCommand("device", {
-    description => "Device name to remove/decom (have to be valid).",
+    description => "The device name that have to bne removed/decom.",
     match => qr/$deviceRegex/,
     required => 1
 });
@@ -54,19 +54,19 @@ $cli->setCommand("device", {
 # --type define if we work with a Network device or a UIM Robot.
 $cli->setCommand("type", {
     expect => ["robot", "device"],
-    description => "Define if we have to remove a network <device> or an UIM <robot>",
-    defaultValue => "robot"
+    description => "Define if we have to remove a network `device` or an UIM (Nimsoft) `robot`",
+    defaultValue => "device"
 });
 
 # --alarms Enable the option that will acknowledge all active alarms!
 $cli->setCommand("alarms", {
-    description =>  "Enable disabling of active alarms",
+    description =>  "Enable acknowledge of all active alarms",
     defaultValue => 0
 });
 
 # --qos Enable delete of all QoS history
 $cli->setCommand("qos", {
-    description => "Enable deletion of QOS History",
+    description => "Enable deletion of all QOS History",
     defaultValue => 0
 });
 
@@ -78,7 +78,7 @@ $cli->setCommand("remove", {
 
 # --clean Remove alarms history
 $cli->setCommand("clean", {
-    description => "Clean alarms history",
+    description => "Clean alarms history and logs",
     defaultValue => 0
 });
 
@@ -101,17 +101,17 @@ sub remove_from_uim {
     print STDOUT "Discovery_server Addr found: $addr\n";
 
     # Trigger callback remove_master_devices_by_cskeys on discovery_server
-    # {
-    #     my $PDS = Nimbus::PDS->new();
-    #     $PDS->string("csKeys", $cs_key);
-    #     my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_master_devices_by_cskeys", $PDS->data);
-    #     if($RC != NIME_OK) {
-    #         my $nimError = nimError2Txt($RC);
-    #         print STDERR "Failed to trigger callback remove_master_devices_by_cskeys, Error ($RC): $nimError\n";
+    {
+        my $PDS = Nimbus::PDS->new();
+        $PDS->string("csKeys", $cs_key);
+        my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_master_devices_by_cskeys", $PDS->data);
+        if($RC != NIME_OK) {
+            my $nimError = nimError2Txt($RC);
+            print STDERR "Failed to trigger callback remove_master_devices_by_cskeys, Error ($RC): $nimError\n";
 
-    #         return 0;
-    #     }
-    # }
+            return 0;
+        }
+    }
 
     # Cleanup nas service memory table (not mandatory).
     my $PDS = Nimbus::PDS->new();
@@ -172,6 +172,7 @@ sub remove_robot {
 # DESC: Remove the device from any collectors
 #
 sub remove_collector {
+    my ($DB) = @_;
     print STDOUT "---------------------------\n";
     print STDOUT "Entering step - remove_collector\n";
 
@@ -182,27 +183,29 @@ sub remove_collector {
     if ($RC != NIME_OK) {
         my $nimError = nimError2Txt($RC);
         print STDERR "Failed to find any snmpcollector Addr, Error ($RC): $nimError\n";
-
-        return undef;
     }
-    undef $RC;
-    undef $PDS; 
+    else {
+        undef $RC;
+        undef $PDS;
 
-    # Delete our network host for every snmpcollector probe(s) retrieved
-    my $PDSRet = Nimbus::PDS->new($nimRET);
-    my $SNMPPDS = Nimbus::PDS->new();
-    $SNMPPDS->string("Host", $deviceName);
-    for( my $i = 0; my $addr = $PDSRet->getTable("addr", PDS_PCH, $i); $i++) {
-        print STDOUT "Found an snmp_collector probe at $addr\n";
-        my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_snmp_device", $SNMPPDS->data);
-        if($RC != NIME_OK) {
-            my $nimError = nimError2Txt($RC);
-            print STDERR "Failed to execute callback `remove_snmp_device` on probe snmpcollector at $addr, Error ($RC): $nimError\n";
-
-            next;
+        # Delete our network host for every snmpcollector probe(s) retrieved
+        my $PDSRet = Nimbus::PDS->new($nimRET);
+        my $SNMPPDS = Nimbus::PDS->new();
+        $SNMPPDS->string("Host", $deviceName);
+        for( my $i = 0; my $addr = $PDSRet->getTable("addr", PDS_PCH, $i); $i++) {
+            print STDOUT "Found an snmp_collector probe at $addr\n";
+            my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_snmp_device", $SNMPPDS->data);
+            if($RC != NIME_OK) {
+                my $nimError = nimError2Txt($RC);
+                print STDERR "Failed to execute callback `remove_snmp_device` on probe snmpcollector at $addr, Error ($RC): $nimError\n";
+                next;
+            }
+            print STDOUT "Successfully trigerred callback `remove_snmp_device`\n";
         }
-        print STDOUT "Successfully trigerred callback `remove_snmp_device`\n";
     }
+
+    # Insert new row for nokia_ipsla probe!
+    $DB->decom_nokiaipsla($deviceName);
 }
 
 #

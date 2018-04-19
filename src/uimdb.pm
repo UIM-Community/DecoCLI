@@ -132,4 +132,15 @@ sub clean_alarms_history {
     return $self;
 }
 
+#
+# DESC: Clean all alarms history for a given device
+#
+sub decom_nokiaipsla {
+    my ($self, $deviceName) = @_;
+    my $sth = $self->{DB}->prepare("INSERT INTO nokia_ipsla_decommission (device) VALUES (?)");
+    my $ret = $sth->execute($deviceName);
+    print STDOUT "decom_nokiaipsla return => $ret\n";
+    $sth->finish();
+}
+
 1;
