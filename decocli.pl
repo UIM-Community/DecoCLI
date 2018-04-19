@@ -92,38 +92,80 @@ sub remove_from_uim {
 
     # Get CS Key
     my $cs_key = $DB->cs_key($deviceName);
+    return 0 if not defined($cs_key);
     print STDOUT "Device cs_key => $cs_key\n";
 
     # Find (at least one) Discovery_server Addr
     my $addr = findProbeByHisName("discovery_server");
-    return if not defined($addr);
+    return 0 if not defined($addr);
     print STDOUT "Discovery_server Addr found: $addr\n";
 
     # Trigger callback remove_master_devices_by_cskeys on discovery_server
-    {
-        my $PDS = Nimbus::PDS->new();
-        $PDS->string("csKeys", $cs_key);
-        my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_master_devices_by_cskeys", $PDS->data);
-        if($RC != NIME_OK) {
-            my $nimError = nimError2Txt($RC);
-            print STDERR "Failed to trigger callback remove_master_devices_by_cskeys, Error ($RC): $nimError\n";
+    # {
+    #     my $PDS = Nimbus::PDS->new();
+    #     $PDS->string("csKeys", $cs_key);
+    #     my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_master_devices_by_cskeys", $PDS->data);
+    #     if($RC != NIME_OK) {
+    #         my $nimError = nimError2Txt($RC);
+    #         print STDERR "Failed to trigger callback remove_master_devices_by_cskeys, Error ($RC): $nimError\n";
 
-            return;
-        }
+    #         return 0;
+    #     }
+    # }
+
+    # Cleanup nas service memory table (not mandatory).
+    my $PDS = Nimbus::PDS->new();
+    $PDS->string("ip", $deviceName);
+    my ($RC, $AlarmsRET) = nimNamedRequest($nasAddr, "nameservice_delete", $PDS->data);
+    if($RC != NIME_OK) {
+        my $nimError = nimError2Txt($RC);
+        print STDERR "Failed to trigger callback nameservice_delete on NAS, Error ($RC): $nimError\n";
     }
 
-    # Clean-up NAS addr table
+    return 1;
 }
 
 #
-# TODO
 # DESC: Remove the robot from his UIM Hub
 #
 sub remove_robot {
     print STDOUT "---------------------------\n";
     print STDOUT "Entering step - remove_robot\n";
-    # Search on all hubs
-    # trigger removerobot callback!
+
+    # Try to find the UIM Robot addr
+    my $hubAddr;
+    {
+        my $PDS = Nimbus::PDS->new();
+        $PDS->string("robotname", $deviceName);
+        my ($RC, $nimRET) = nimFindAsPds($PDS->data, NIMF_ROBOT);
+        if ($RC != NIME_OK) {
+            my $nimError = nimError2Txt($RC);
+            print STDERR "Failed to find robot addr for $deviceName, Error ($RC): $nimError\n";
+
+            return;
+        }
+
+        # Get the device hub addr
+        my $addr = Nimbus::PDS->new($nimRET)->getTable("addr", PDS_PCH);
+        return if not defined($addr);
+        print STDOUT "Device Nimsoft addr => $addr\n";
+
+        my @groups = split("/", $addr);
+        $hubAddr = "/$groups[1]/$groups[2]/hub";
+        print STDOUT "Device Nimsoft hub addr => $hubAddr\n";
+    }
+
+    # trigger removerobot callback on hub
+    my $PDS = Nimbus::PDS->new();
+    $PDS->string("name", $deviceName);
+    my ($RC, $nimRET) = nimNamedRequest($hubAddr, "removerobot", $PDS->data);
+    if ($RC != NIME_OK) {
+        my $nimError = nimError2Txt($RC);
+        print STDERR "Failed to remove device $deviceName from hub $hubAddr, Error ($RC): $nimError\n";
+
+        return;
+    }
+    print STDOUT "Successfully removed the device $deviceName from hub $hubAddr\n";
 }
 
 #
@@ -132,6 +174,35 @@ sub remove_robot {
 sub remove_collector {
     print STDOUT "---------------------------\n";
     print STDOUT "Entering step - remove_collector\n";
+
+    # Retrieve all snmpcollector probes
+    my $PDS = Nimbus::PDS->new();
+    $PDS->string("probename", "snmpcollector");
+    my ($RC, $nimRET) = nimFindAsPds($PDS->data, NIMF_PROBE);
+    if ($RC != NIME_OK) {
+        my $nimError = nimError2Txt($RC);
+        print STDERR "Failed to find any snmpcollector Addr, Error ($RC): $nimError\n";
+
+        return undef;
+    }
+    undef $RC;
+    undef $PDS; 
+
+    # Delete our network host for every snmpcollector probe(s) retrieved
+    my $PDSRet = Nimbus::PDS->new($nimRET);
+    my $SNMPPDS = Nimbus::PDS->new();
+    $SNMPPDS->string("Host", $deviceName);
+    for( my $i = 0; my $addr = $PDSRet->getTable("addr", PDS_PCH, $i); $i++) {
+        print STDOUT "Found an snmp_collector probe at $addr\n";
+        my ($RC, $AlarmsRET) = nimNamedRequest($addr, "remove_snmp_device", $SNMPPDS->data);
+        if($RC != NIME_OK) {
+            my $nimError = nimError2Txt($RC);
+            print STDERR "Failed to execute callback `remove_snmp_device` on probe snmpcollector at $addr, Error ($RC): $nimError\n";
+
+            next;
+        }
+        print STDOUT "Successfully trigerred callback `remove_snmp_device`\n";
+    }
 }
 
 #
@@ -200,9 +271,9 @@ sub delete_qos {
 sub main {
 
     # Init CLI options
-    my $script_arguments = $cli->init;
-    my $type = $script_arguments->{type};
-    $deviceName = $script_arguments->{device};
+    my $argv = $cli->init;
+    my $type = $argv->{type};
+    $deviceName = $argv->{device};
 
     # Open the local configuration file
     my $CFG = Nimbus::CFG->new("decocli.cfg");
@@ -240,9 +311,19 @@ sub main {
         my $user    = $CFG->{"database"}->{"user"} || "sa";
         my $passwd  = $CFG->{"database"}->{"password"} || "";
 
-        my $CS      = "DBI:$DBType:database=$db;host=$host;port=$port";
+        my $CS;
+        if ($DBType eq "mysql") {
+            $CS = "DBI:mysql:database=$db;host=$host;port=$port";
+        }
+        elsif ($DBType eq "mssql") {
+            $CS = "DBI:ODBC:Driver={SQL Server};SERVER=$host,$port;Database=$db;UID=$user;PWD=$passwd"
+        }
+        elsif ($DBType eq "oracle") {
+            $CS = "DBI:Oracle:host=$host;sid=$db;port=$port";
+        }
         print STDOUT "SQL connection string: $CS\n";
-        $DB = src::uimdb->new($CS, $user, $passwd);
+        $DB = src::uimdb->new($DBType, $CS, $user, $passwd);
+        $DB->{DB}->do("use ${db};") if $DBType eq "mssql";
     }
     undef $CFG;
 
@@ -251,19 +332,24 @@ sub main {
     return if not defined($nasAddr);
     print STDOUT "NAS Addr found: $nasAddr\n";
 
-    exit 0;
-
     # Finally execute each steps
-    remove_from_uim($DB, $Robotname, $nasAddr);
-    remove_robot() if $type eq "robot" && $script_arguments->{remove} == 1;
-    remove_collector() if $type eq "device";
-    close_alarms($Robotname, $nasAddr) if $script_arguments->{alarms} == 1;
-    clean_alarms_history($DB) if $script_arguments->{clean} == 1;
-    delete_qos($DB) if $script_arguments->{qos} == 1;
+    my $iRC = remove_from_uim($DB, $Robotname, $nasAddr);
+    die "Failed to terminate remove_from_uim without critical error(s)!" if $iRC == 0;
 
+    remove_robot($Robotname) if $type eq "robot" && $argv->{remove} == 1;
+    remove_collector() if $type eq "device";
+    close_alarms($Robotname, $nasAddr) if $argv->{alarms} == 1;
+    clean_alarms_history($DB) if $argv->{clean} == 1;
+    delete_qos($DB) if $argv->{qos} == 1;
+
+    $DB->{DB}->disconnect();
+    print STDOUT "---------------------------\n";
     print STDOUT "\nExiting CLI tool with code 0\n";
 }
 
 # Execute main script handler!
-main();
+eval {
+    main();
+};
+print STDERR $@ if $@;
 exit 0;
