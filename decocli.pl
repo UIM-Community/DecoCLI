@@ -1,4 +1,3 @@
-#!/opt/nimsoft/perl/bin/perl5.14.2
 # use perl5 core dependencie(s)
 use strict;
 use warnings;
@@ -79,6 +78,12 @@ $cli->setCommand("remove", {
 # --clean Remove alarms history
 $cli->setCommand("clean", {
     description => "Clean alarms history and logs",
+    defaultValue => 0
+});
+
+# --nokia Enable decom of SNMP Nokia device
+$cli->setCommand("nokia", {
+    description => "Enable decom of SNMP Nokia device",
     defaultValue => 0
 });
 
@@ -172,7 +177,7 @@ sub remove_robot {
 # DESC: Remove the device from any collectors
 #
 sub remove_collector {
-    my ($DB) = @_;
+    my ($DB, $nokiadecom) = @_;
     print STDOUT "---------------------------\n";
     print STDOUT "Entering step - remove_collector\n";
 
@@ -205,7 +210,10 @@ sub remove_collector {
     }
 
     # Insert new row for nokia_ipsla probe!
-    $DB->decom_nokiaipsla($deviceName);
+    if ($nokiadecom == 1) {
+        print STDOUT "Decom nokia_ipsla device\n";
+        $DB->decom_nokiaipsla($deviceName);
+    }
 }
 
 #
@@ -340,7 +348,7 @@ sub main {
     die "Failed to terminate remove_from_uim without critical error(s)!" if $iRC == 0;
 
     remove_robot($Robotname) if $type eq "robot" && $argv->{remove} == 1;
-    remove_collector() if $type eq "device";
+    remove_collector($DB, $argv->{nokia}) if $type eq "device";
     close_alarms($Robotname, $nasAddr) if $argv->{alarms} == 1;
     clean_alarms_history($DB) if $argv->{clean} == 1;
     delete_qos($DB) if $argv->{qos} == 1;
