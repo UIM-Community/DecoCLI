@@ -1,7 +1,6 @@
 # use perl5 core dependencie(s)
 use strict;
 use warnings;
-use Data::Dumper qw(Dumper);
 
 # Use Nimbus dependencie(s)
 # Update path depending on your system!
@@ -45,7 +44,7 @@ my $cli = src::cli->new({
 
 # --device command to set string* device name
 $cli->setCommand("device", {
-    description => "The device name that have to bne removed/decom.",
+    description => "The device name that have to be removed/decom.",
     match => qr/$deviceRegex/,
     required => 1
 });

@@ -44,6 +44,8 @@ sub init {
         print STDOUT "\nUsage: $self->{usage}\n\n";
         print STDOUT "$self->{description}\n\n";
         print STDOUT "Options:\n";
+        print STDOUT "\t[--help] or [--h] Output usage and all available options with description\n";
+        print STDOUT "\t[--version] or [--v] Ouput the CLI version\n";
         foreach my $command (keys %{ $self->{commands} }) {
             my $description = $self->{commands}->{$command}->{description} || "";
             my $required = $self->{commands}->{$command}->{required} ? "Mandatory" : "Optional";
