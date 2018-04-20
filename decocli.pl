@@ -44,7 +44,7 @@ my $cli = src::cli->new({
 
 # --device command to set string* device name
 $cli->setCommand("device", {
-    description => "The device name that have to bne removed/decom.",
+    description => "The device name that have to be removed/decom.",
     match => qr/$deviceRegex/,
     required => 1
 });
