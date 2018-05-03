@@ -3,7 +3,11 @@ package src::uimdb;
 # use perl5 core dependencie(s)
 use strict;
 use DBI;
-use Data::Dumper;
+use threads;
+use Thread::Queue;
+
+# Constants
+our $QOS_THREAD = 15;
 
 #
 # DESC: Database manager (connector) for the UIM Database
@@ -13,6 +17,9 @@ sub new {
     my $DB = DBI->connect($CS, $user, $password);
     die "Failed to establish a connection to the Database, Error: ".$DBI::errstr."\n" if not defined($DB);
     return bless({
+        CS => $CS,
+        user => $user,
+        password => $password,
         type => $type,
         DB => $DB
     }, ref($class) || $class);
@@ -92,19 +99,50 @@ sub clean_qos {
     my $tableCount = scalar keys %{ $Agregate };
     print STDOUT "Number of QOS Table to cleanup => $tableCount\n";
 
-    # Bulk delete
-    $self->{DB}->begin_work;
+    # Enqueue all tasks!
+    my $queue = Thread::Queue->new();
     foreach my $table (keys %{ $Agregate }) {
-        my $ids = join(',', @{ $Agregate->{$table} });
-        my $deleteSth = $self->{DB}->prepare("DELETE FROM $table WHERE table_id IN ($ids)");
-        my $deletedCount = $deleteSth->execute();
-        if ($deletedCount eq "0E0") {
-            $deletedCount = "0";
-        }
-        print STDOUT "Deleted $deletedCount row(s) on table $table with table_id = $_->{id}\n";
-        $deleteSth->finish();
+        $queue->enqueue({
+            table => $table,
+            ids => join(',', @{ $Agregate->{$table} } )
+        });
     }
-    $self->{DB}->commit;
+
+    # Define the thread
+    my $thr = sub {
+        my ($type, $cs, $user, $password) = @_; 
+        my $DB = src::uimdb->new($type, $cs, $user, $password);
+
+        while ( defined ( my $hash = $queue->dequeue() ) )  {
+            eval {
+                my $table = $hash->{table};
+                my $deleteSth = $DB->{DB}->prepare("DELETE FROM $table WHERE table_id IN ($hash->{ids})");
+                my $deletedCount = $deleteSth->execute();
+                if ($deletedCount eq "0E0") {
+                    $deletedCount = "0";
+                }
+                print STDOUT "Deleted $deletedCount row(s) on table $table\n";
+            };
+            if ($@) {
+                print STDERR $@;
+            }
+        }
+    };
+
+    # Join thread pools!
+    my @thr = map {
+        threads->create(
+            \&$thr,
+            $self->{type},
+            $self->{CS},
+            $self->{user},
+            $self->{password}
+        );
+    } 1..$QOS_THREAD;
+    for(my $i = 0; $i < $QOS_THREAD; $i++) {
+        $queue->enqueue(undef);
+    }
+    $_->join() for @thr;
 
     return $self;
 }
