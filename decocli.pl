@@ -80,6 +80,12 @@ $cli->setCommand("clean", {
     defaultValue => 0
 });
 
+# --force the script to continue even if something fail in remove_from_uim() method
+$cli->setCommand("force", {
+    description => "Continue to work even if remove_from_uim() method fail (useful to remove devices that are not in cm_computer table).",
+    defaultValue => 0
+});
+
 # --nokia Enable decom of SNMP Nokia device
 $cli->setCommand("nokia", {
     description => "Enable decom of SNMP Nokia device",
@@ -281,8 +287,9 @@ sub delete_qos {
 sub main {
 
     # Init CLI options
-    my $argv = $cli->init;
-    my $type = $argv->{type};
+    my $argv    = $cli->init;
+    my $type    = $argv->{type};
+    my $force   = $argv->{force};
     $deviceName = $argv->{device};
 
     # Open the local configuration file
@@ -344,7 +351,9 @@ sub main {
 
     # Finally execute each steps
     my $iRC = remove_from_uim($DB, $Robotname, $nasAddr);
-    die "Failed to terminate remove_from_uim without critical error(s)!" if $iRC == 0;
+    if ($iRC == 0 && $force == 0) {
+        die "Failed to terminate remove_from_uim without critical error(s)!";
+    }
 
     remove_robot($Robotname) if $type eq "robot" && $argv->{remove} == 1;
     remove_collector($DB, $argv->{nokia}) if $type eq "device";
