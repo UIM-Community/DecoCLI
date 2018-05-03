@@ -34,11 +34,12 @@ it must be run with Nimsoft's perl (normally installed in `nimsoft/perl/bin/perl
 | help | Output usage and all available options with description (**it will exit the script on start**). | none | no |
 | version | Ouput the CLI version (**it will exit the script on start**). | none | no |
 | device | The device name that have to be removed/decom. | none | yes |
-| type | Define if we have to remove a network `device` or an UIM (Nimsoft) `robot` | robot | no |
+| type | Define if we have to remove a network `device` or an UIM (Nimsoft) `robot` | device | no |
 | alarms | Enable acknowledge of all active alarms | 0 | no |
 | qos | Enable deletion of all QOS History | 0 | no |
 | remove | Remove the robot from his hub (work only when option --type is equal to robot) | 0 | no |
 | clean | Clean alarms history and logs | 0 | no |
+| nokia | Remove device from nokia_ipsla probe(s) | 0 | no |
 
 ## Configuration
 
