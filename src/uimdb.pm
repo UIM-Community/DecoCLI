@@ -78,14 +78,26 @@ sub clean_qos {
     $sth->finish();
 
     my $entryCount = scalar @EntryToClean;
-    print STDOUT "Number of QOS Table to cleanup => $entryCount\n";
+    print STDOUT "Number of (Raw) QOS entry to cleanup => $entryCount\n";
+
+    # Agregate by tableName
+    my $Agregate = {};
+    foreach(@EntryToClean) {
+        if (not defined $Agregate->{$_->{table}}) {
+            $Agregate->{$_->{table}} = [];
+        }
+        push(@{ $Agregate->{$_->{table}} }, $_->{id});
+    }
+
+    my $tableCount = scalar keys %{ $Agregate };
+    print STDOUT "Number of QOS Table to cleanup => $tableCount\n";
 
     # Bulk delete
     $self->{DB}->begin_work;
-    foreach(@EntryToClean) {
-        my $table = $_->{table};
-        my $deleteSth = $self->{DB}->prepare("DELETE FROM $table WHERE table_id=?");
-        my $deletedCount = $deleteSth->execute($_->{id});
+    foreach my $table (keys %{ $Agregate }) {
+        my $ids = join(',', @{ $Agregate->{$table} });
+        my $deleteSth = $self->{DB}->prepare("DELETE FROM $table WHERE table_id IN ($ids)");
+        my $deletedCount = $deleteSth->execute();
         if ($deletedCount eq "0E0") {
             $deletedCount = "0";
         }
