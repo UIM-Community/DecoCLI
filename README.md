@@ -16,6 +16,7 @@ Most of these features have to be activated on start. (see the Usage section).
 - Cleanup alarms history and logs.
 - Remove UIM Robot from his hub.
 - Remove all QoS.
+- Remove MCS/SSR Profile(s).
 - Remove network device from "activated" snmpcollector probe(s).
 - Remove NAS service entry.
 
@@ -72,8 +73,8 @@ The **nimbus_login** and **nimbus_password** are required to authenticate the sc
 > Warning: This script has been tested on MySQL. Please open an issue if the script doesnt work with a others.
 
 
-## To be implemented 
+## Roadmap
 
-- Refactor findProbesByName to return all ADDR.
-- Implement QoS cleanup for SSR/MCS
+- Audit mode (with a reporting mechanism)
+- On demand mode
 - More test(s) around Database connection string & Request compatibility
