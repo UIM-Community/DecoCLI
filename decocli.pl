@@ -337,7 +337,6 @@ sub main {
     my $nasAddr = findProbeByHisName("nas");
     return if not defined($nasAddr);
     print STDOUT "NAS Addr(s) found: $nasAddr\n";
-    exit 0;
 
     # Finally execute each steps
     my ($iRC, $cs_id) = remove_from_uim($DB, $Robotname, $nasAddr);
