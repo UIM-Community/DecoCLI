@@ -83,7 +83,13 @@ sub findProbeByHisName {
         return undef;
     }
 
-    return Nimbus::PDS->new($nimRET)->getTable("addr", PDS_PCH);
+    my @ret = ();
+    my $PDSRet = Nimbus::PDS->new($nimRET);
+    for( my $i = 0; my $addr = $PDSRet->getTable("addr", PDS_PCH, $i); $i++) {
+        push(@ret, $addr);
+    }
+    
+    return \@ret;
 }
 
 1;
