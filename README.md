@@ -1,15 +1,17 @@
 # DecoCLI
 CA UIM - Agent/Device decomission CLI too
 
-A Commande Line Interface (CLI) tool for deleting UIM Robot/Device.
+A Commande Line Interface (CLI) tool for deleting **one** UIM Agent (Robot) / Network device **at a time**.
 
 ## Goals
 
-The script mainly aims to provide a "**safe**" way to decom an UIM Robot or a Network device (that work with snmpcollector or a third-party device).
+The script mainly aims to provide a "**safe**" way to decom an UIM Agent or a Network device (that work with the probe snmpcollector).
+
+The script can work with only one equipment at a time and there is no mechanism to filters Alarms or QoS (these kinds of features are not the purpose of this script).
 
 ## Features
 
-Most of these features have to be activated on start. (see the Usage section).
+Most of these features have to be activated on start. (**see the Usage section**).
 
 - Remove the device from UIM (remove_master_devices_by_cskeys).
 - Acknowledge active alarms.
@@ -22,10 +24,16 @@ Most of these features have to be activated on start. (see the Usage section).
 
 ## Usage
 
-The script has to be runned with these options (each option have to be prefixed with `--`).
+The script has to be runned from a terminal with these options (each option have to be prefixed with characters `--`).
 
 ```bash
 perl decocli.pl [options]
+```
+
+For example, if you want to remove an UIM Agent and acknowledge all active alarms you will have to write the following command:
+
+```bash
+perl decocli.pl --device yourArgentName --remove --alarms
 ```
 
 it must be run with Nimsoft's perl (normally installed in `nimsoft/perl/bin/perl5.14.2`).
@@ -41,6 +49,8 @@ it must be run with Nimsoft's perl (normally installed in `nimsoft/perl/bin/perl
 | remove | Remove the robot from his hub (work only when option --type is equal to robot) | 0 | no |
 | clean | Clean alarms history and logs | 0 | no |
 | force | Continue to work even if remove_from_uim() method fail (useful to remove devices that are not in cm_computer table). | 0 | no |
+
+> **Note** The "device" option doesn't have to take any kind of string quote. The device have to match the following regex: **^[a-zA-Z0-9-_@]{2,50}$**
 
 ## Configuration
 
