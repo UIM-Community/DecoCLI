@@ -6,7 +6,7 @@ use DBI;
 use threads;
 use Thread::Queue;
 
-# Constants
+# Static variable(s)
 our $QOS_THREAD = 15;
 
 #
@@ -33,7 +33,7 @@ sub cm_computer {
 
     # Build SQL Request
     my $lock = $self->{type} ne "mysql" ? " WITH(nolock)" : "";
-    my $sth = $self->{DB}->prepare("SELECT cs_key FROM CM_COMPUTER_SYSTEM $lock WHERE name=?");
+    my $sth = $self->{DB}->prepare("SELECT cs_key, cs_id FROM CM_COMPUTER_SYSTEM $lock WHERE name=?");
     $sth->execute($deviceName) or die $DBI::errstr;
 
     # Get cs_key from the response!
@@ -157,13 +157,27 @@ sub clean_mcs_ssr {
     my @toDelete = ('QOS_SSR_%', 'QOS_MCS_%');
     foreach(@toDelete) {
         my $sth = $self->{DB}->prepare("DELETE FROM S_QOS_DATA WHERE qos LIKE ? AND source=?");
-        my $deleteCount = $sth->execute($_, $deviceName);
+        my $deletedCount = $sth->execute($_, $deviceName);
         if ($deletedCount eq "0E0") {
             $deletedCount = "0";
         }
 
         print STDOUT "Deleted $deletedCount row(s) on table S_QOS_DATA WHERE LIKE '$_'\n";
     }
+
+    # Delete SSR Profile(s)
+    my @sqlTable = ('SSRV2Profile', 'SSRV2Poller', 'SSRV2Device');
+    foreach(@sqlTable) {
+        my $sth_log = $self->{DB}->prepare("DELETE FROM $_ WHERE cs_id=?");
+        my $deletedCount = $sth_log->execute($cs_id) or die $DBI::errstr;
+        if ($deletedCount eq "0E0") {
+            $deletedCount = "0";
+        }
+        print STDOUT "$deletedCount rows deleted from table `$_`\n";
+        $sth_log->finish();
+    }
+
+    return $self;
 }
 
 #
@@ -172,30 +186,15 @@ sub clean_mcs_ssr {
 sub clean_alarms_history {
     my ($self, $deviceName) = @_;
 
-    # Clean nas_transaction_log table
-    {
-        my $sth_log = $self->{DB}->prepare(
-            "DELETE FROM nas_transaction_log WHERE hostname=?"
-        );
+    my @sqlTable = ('nas_transaction_log', 'nas_transaction_summary');
+    foreach(@sqlTable) {
+        my $sth_log = $self->{DB}->prepare("DELETE FROM $_ WHERE hostname=?");
         my $deletedCount = $sth_log->execute($deviceName) or die $DBI::errstr;
         if ($deletedCount eq "0E0") {
             $deletedCount = "0";
         }
-        print STDOUT "$deletedCount rows deleted from `nas_transaction_log`\n";
+        print STDOUT "$deletedCount rows deleted from table `$_`\n";
         $sth_log->finish();
-    }
-
-    # Clean nas_transaction_summary table
-    {
-        my $sth_summary = $self->{DB}->prepare(
-            "DELETE FROM nas_transaction_summary WHERE hostname=?"
-        );
-        my $deletedCount = $sth_summary->execute($deviceName) or die $DBI::errstr;
-        if ($deletedCount eq "0E0") {
-            $deletedCount = "0";
-        }
-        print STDOUT "$deletedCount rows deleted from `nas_transaction_summary`\n";
-        $sth_summary->finish();
     }
 
     return $self;
