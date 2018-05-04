@@ -64,6 +64,7 @@ it must be run with Nimsoft's perl (normally installed in `nimsoft/perl/bin/perl
 | qos | Enable deletion of all QOS History | 0 | no |
 | remove | Remove the robot from his hub (work only when option --type is equal to robot) | 0 | no |
 | clean | Clean alarms history and logs | 0 | no |
+| mcssr | Clean MCS and/or SSR QoS and Profiles | 0 | no |
 | force | Continue to work even if remove_from_uim() method fail (useful to remove devices that are not in cm_computer table). | 0 | no |
 
 > **Note** The "device" option doesn't have to take any kind of string quote. The device have to match the following regex: **^[a-zA-Z0-9-_@]{2,50}$**
