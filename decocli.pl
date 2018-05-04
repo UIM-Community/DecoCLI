@@ -86,6 +86,12 @@ $cli->setCommand("force", {
     defaultValue => 0
 });
 
+# Clean MCS/SSR QoS and profiles
+$cli->setCommand("mcssr", {
+    description => "Clean MCS and/or SSR QoS and Profiles",
+    defaultValue => 0
+});
+
 #
 # DESC: Remove Device/Agent from UIM with discovery_server probe
 #
@@ -95,7 +101,8 @@ sub remove_from_uim {
     print STDOUT "Entering step - remove_from_uim\n";
 
     # Get CS Key
-    my $cs_key = $DB->cs_key($deviceName);
+    my $info = $DB->cm_computer($deviceName);
+    my $cs_key = $info->{"cs_key"};
     return 0 if not defined($cs_key);
     print STDOUT "Device cs_key => $cs_key\n";
 
@@ -126,7 +133,7 @@ sub remove_from_uim {
         print STDERR "Failed to trigger callback nameservice_delete on NAS, Error ($RC): $nimError\n";
     }
 
-    return 1;
+    return 1, $info->{"cs_id"};
 }
 
 #
@@ -338,7 +345,7 @@ sub main {
     print STDOUT "NAS Addr found: $nasAddr\n";
 
     # Finally execute each steps
-    my $iRC = remove_from_uim($DB, $Robotname, $nasAddr);
+    my ($iRC, $cs_id) = remove_from_uim($DB, $Robotname, $nasAddr);
     if ($iRC == 0 && $force == 0) {
         die "Failed to terminate remove_from_uim without critical error(s)!";
     }
@@ -348,6 +355,11 @@ sub main {
     close_alarms($Robotname, $nasAddr) if $argv->{alarms} == 1;
     clean_alarms_history($DB) if $argv->{clean} == 1;
     delete_qos($DB) if $argv->{qos} == 1;
+    if($argv->{mcssr} == 1) {
+        print STDOUT "---------------------------\n";
+        print STDOUT "Entering step - clean_mcs_ssr\n";
+        $DB->clean_mcs_ssr($deviceName, $cs_id);
+    }
 
     $DB->{DB}->disconnect();
     print STDOUT "---------------------------\n";

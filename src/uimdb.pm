@@ -26,9 +26,9 @@ sub new {
 }
 
 #
-# DESC: Get the cs_key of a given device on the SQL Table `CM_COMPUTER_SYSTEM`
+# DESC: Get the cs_key and cs_id of a given device on the SQL Table `CM_COMPUTER_SYSTEM`
 #
-sub cs_key {
+sub cm_computer {
     my ($self, $deviceName) = @_;
 
     # Build SQL Request
@@ -37,16 +37,16 @@ sub cs_key {
     $sth->execute($deviceName) or die $DBI::errstr;
 
     # Get cs_key from the response!
-    my $cs_key;
+    my $ret;
     while (my $ref = $sth->fetchrow_hashref()) {
-        $cs_key = $ref->{"cs_key"};
+        $ret = $ref;
     }
-    if (not defined $cs_key) {
-        print STDERR "Unable to found cs_key for device $deviceName\n";
+    if (not defined $ret) {
+        print STDERR "Unable to found cs_key and cs_id for device $deviceName\n";
     }
     $sth->finish();
 
-    return $cs_key;
+    return $ret;
 }
 
 #
@@ -145,6 +145,25 @@ sub clean_qos {
     $_->join() for @thr;
 
     return $self;
+}
+
+#
+# DESC: Clean MCS or SSR QoS
+#
+sub clean_mcs_ssr {
+    my ($self, $deviceName, $cs_id) = @_;
+
+    # Delete MCS/SSR QoS
+    my @toDelete = ('QOS_SSR_%', 'QOS_MCS_%');
+    foreach(@toDelete) {
+        my $sth = $self->{DB}->prepare("DELETE FROM S_QOS_DATA WHERE qos LIKE ? AND source=?");
+        my $deleteCount = $sth->execute($_, $deviceName);
+        if ($deletedCount eq "0E0") {
+            $deletedCount = "0";
+        }
+
+        print STDOUT "Deleted $deletedCount row(s) on table S_QOS_DATA WHERE LIKE '$_'\n";
+    }
 }
 
 #
