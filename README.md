@@ -90,17 +90,10 @@ The **nimbus_login** and **nimbus_password** are required to authenticate the sc
 
 **close_alarms_by** is used when all alarms are acknowledged (to know who is responsible for).
 
-### Available DB Type are :
+#### Available DB Type are :
 
 - mysql
 - mssql (GDBC)
 - oracle
 
 > Warning: This script has been tested on MySQL. Please open an issue if the script doesnt work with a others.
-
-
-## Roadmap
-
-- Audit mode (with a reporting mechanism)
-- On demand mode
-- More test(s) around Database connection string & Request compatibility
