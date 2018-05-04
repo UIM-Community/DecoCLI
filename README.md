@@ -22,6 +22,22 @@ Most of these features have to be activated on start. (**see the Usage section**
 - Remove network device from "activated" snmpcollector probe(s).
 - Remove NAS service entry.
 
+## Prerequisites
+
+To run the script you will to download or get:
+
+- A CA UIM (Nimsoft) **Hub** to deploy the decocli package.
+- SDK_Perl (**version 5.10 at least**).
+
+The database library is not bundled with the NimSoft package (there is a chance that you will need to install it with **cpan** on your cible system).
+
+Required cpan package are (for MySQL): 
+
+- [DBI::DBD](http://search.cpan.org/dist/DBI/lib/DBI/DBD.pm)
+- [DBD::mysql](http://search.cpan.org/~capttofu/DBD-mysql-4.046/lib/DBD/mysql.pm)
+
+For another database you will have to look for the right driver !
+
 ## Usage
 
 The script has to be runned from a terminal with these options (each option have to be prefixed with characters `--`).
