@@ -64,7 +64,6 @@ sub clean_qos {
     # Handle response!
     while (my $ref = $sth->fetchrow_hashref()) {
         my $tableId = $ref->{"table_id"};
-        my $id = substr($ref->{"r_table"}, -4);
         push(@EntryToClean, {
             table => $ref->{"r_table"},
             id => $tableId
@@ -74,11 +73,7 @@ sub clean_qos {
             id => $tableId
         });
         push(@EntryToClean, {
-            table => "DN_QOS_DATA_$id",
-            id => $tableId
-        });
-        push(@EntryToClean, {
-            table => "BN_QOS_DATA_$id",
+            table => "S_QOS_DATA",
             id => $tableId
         });
     }
@@ -116,7 +111,9 @@ sub clean_qos {
         while ( defined ( my $hash = $queue->dequeue() ) )  {
             eval {
                 my $table = $hash->{table};
-                my $deleteSth = $DB->{DB}->prepare("DELETE FROM $table WHERE table_id IN ($hash->{ids})");
+                my $query = "DELETE FROM $table WHERE table_id IN ($hash->{ids})";
+                print STDOUT "$query\n";
+                my $deleteSth = $DB->{DB}->prepare($query);
                 my $deletedCount = $deleteSth->execute();
                 if ($deletedCount eq "0E0") {
                     $deletedCount = "0";
