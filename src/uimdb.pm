@@ -60,6 +60,7 @@ sub clean_qos {
     my $sth = $self->{DB}->prepare("SELECT table_id, r_table, h_table FROM S_QOS_DATA $lock WHERE source=?");
     $sth->execute($deviceName);
     my @EntryToClean = ();
+    my @IDS = ();
 
     # Handle response!
     while (my $ref = $sth->fetchrow_hashref()) {
@@ -72,10 +73,7 @@ sub clean_qos {
             table => $ref->{"h_table"},
             id => $tableId
         });
-        push(@EntryToClean, {
-            table => "S_QOS_DATA",
-            id => $tableId
-        });
+        push(@IDS, $tableId);
     }
     $sth->finish();
 
@@ -140,6 +138,11 @@ sub clean_qos {
         $queue->enqueue(undef);
     }
     $_->join() for @thr;
+
+    # Clean S_QOS_DATA table at the end if no error has been encountered
+    my $IDSToClean = join(", ", @IDS);
+    my $cleanQOSData = $self->{DB}->prepare("DELETE FROM S_QOS_DATA WHERE table_id IN($IDSToClean)");
+    $cleanQOSData->execute() or die $DBI::errstr;
 
     return $self;
 }
